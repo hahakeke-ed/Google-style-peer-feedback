@@ -29,7 +29,11 @@
 
       <!-- 1. 로그인 화면 -->
       <div id="login-screen">
-        <p class="text-gray-600 mb-4 text-center">자신의 출석번호와 이름을 입력하세요.</p>
+        <p class="text-gray-600 mb-4 text-center">자신의 학반, 출석번호, 이름을 입력하세요.</p>
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-700 mb-1">학반</label>
+          <input type="text" id="input-class" class="w-full border-gray-300 border p-3 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="예: 3 (또는 3반)">
+        </div>
         <div class="mb-4">
           <label class="block text-sm font-medium text-gray-700 mb-1">출석번호</label>
           <input type="number" id="input-id" class="w-full border-gray-300 border p-3 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="예: 5">
@@ -85,10 +89,10 @@
   <script>
     // =========================================================================
     // ★★★ 가장 중요! 여기에 아까 복사하신 '웹 앱 URL'을 붙여넣으세요! ★★★
-    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz7ME3X2VFl5NHj_aWsNVyqReytc9vH4pypJu3rgbG2STwDEKTifYuobM5M3JeAlw6o/exec';
+    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw7RSo1jxPoIdAP9AewBC6w1ZUN5XBwTtOITKPxOfpyAZnwtcQcV20B9mNTWP02OoQ/exec';
     // =========================================================================
 
-    let currentUser = { id: '', name: '' };
+    let currentUser = { class: '', id: '', name: '' };
     let subjects = []; // 평가해야 할 3명
     let questions = []; // 문항 시트에서 가져온 질문들
     let currentSubjectIndex = 0;
@@ -102,11 +106,12 @@
 
     // 1. 로그인 함수
     async function handleLogin() {
+      const classVal = document.getElementById('input-class').value.trim();
       const id = document.getElementById('input-id').value.trim();
       const name = document.getElementById('input-name').value.trim();
 
-      if (!id || !name) {
-        alert('출석번호와 이름을 모두 입력해주세요.');
+      if (!classVal || !id || !name) {
+        alert('학반, 출석번호, 이름을 모두 입력해주세요.');
         return;
       }
 
@@ -115,12 +120,12 @@
         return;
       }
 
-      currentUser = { id, name };
+      currentUser = { class: classVal, id, name };
       showLoading(true);
 
       try {
-        // GET 요청으로 명단 및 문항 가져오기
-        const response = await fetch(`${SCRIPT_URL}?action=getSubjects&studentId=${id}&studentName=${name}`);
+        // GET 요청으로 명단 및 문항 가져오기 (학반 정보 추가)
+        const response = await fetch(`${SCRIPT_URL}?action=getSubjects&studentClass=${classVal}&studentId=${id}&studentName=${name}`);
         const data = await response.json();
 
         if (data.success) {
@@ -199,6 +204,7 @@
       const textResponse = document.getElementById('text-response').value;
 
       const payload = {
+        evaluatorClass: currentUser.class,
         evaluatorId: currentUser.id,
         evaluatorName: currentUser.name,
         targetName: subjects[currentSubjectIndex],
@@ -212,10 +218,9 @@
         // POST 요청으로 데이터 전송
         const response = await fetch(SCRIPT_URL, {
           method: 'POST',
-          // no-cors 모드는 응답을 읽을 수 없으므로, GAS 웹앱 설정이 올바르다면 생략 가능하거나
-          // Content-Type을 text/plain으로 보내는 꼼수를 씁니다.
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify(payload)
+          body: JSON.stringify(payload),
+          redirect: 'follow' // 리다이렉트 처리 (GAS 필수)
         });
 
         // 성공적으로 제출되면 다음 사람으로 넘어가기
