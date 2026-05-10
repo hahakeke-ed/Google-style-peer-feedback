@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>학생 상호평가</title>
+  <!-- Tailwind CSS 로드 (화면 디자인용) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* 로딩 스피너 애니메이션 */
+    .loader {
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #3b82f6;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto;
+    }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen text-gray-800 font-sans">
+
+  <!-- 메인 컨테이너 -->
+  <div class="max-w-md mx-auto p-4 pt-10">
+    <div class="bg-white rounded-xl shadow-lg p-6">
+      <h1 class="text-2xl font-bold text-center text-blue-600 mb-6">동료 상호평가</h1>
+
+      <!-- 1. 로그인 화면 -->
+      <div id="login-screen">
+        <p class="text-gray-600 mb-4 text-center">자신의 출석번호와 이름을 입력하세요.</p>
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-700 mb-1">출석번호</label>
+          <input type="number" id="input-id" class="w-full border-gray-300 border p-3 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="예: 5">
+        </div>
+        <div class="mb-6">
+          <label class="block text-sm font-medium text-gray-700 mb-1">이름</label>
+          <input type="text" id="input-name" class="w-full border-gray-300 border p-3 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="예: 홍길동">
+        </div>
+        <button onclick="handleLogin()" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 transition">
+          로그인 및 대상자 확인
+        </button>
+      </div>
+
+      <!-- 2. 평가 화면 (초기엔 숨김) -->
+      <div id="eval-screen" class="hidden">
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+          <p class="text-sm text-blue-800 font-bold mb-1">평가 대상자 (<span id="progress-text">1/3</span>)</p>
+          <p class="text-2xl font-black text-blue-900" id="target-name">대상자 이름</p>
+        </div>
+
+        <form id="eval-form" onsubmit="event.preventDefault(); handleSubmit();">
+          <div id="questions-container" class="space-y-6 mb-6">
+            <!-- 질문들이 자바스크립트를 통해 여기에 동적으로 생성됩니다. -->
+          </div>
+
+          <div class="mb-6">
+            <label class="block text-sm font-bold text-gray-700 mb-2">자유 응답 (선택)</label>
+            <textarea id="text-response" rows="3" class="w-full border-gray-300 border p-3 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="칭찬하거나 아쉬웠던 점을 자유롭게 적어주세요."></textarea>
+          </div>
+
+          <button type="submit" class="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition">
+            제출하고 다음 사람 평가하기
+          </button>
+        </form>
+      </div>
+
+      <!-- 3. 완료 화면 (초기엔 숨김) -->
+      <div id="complete-screen" class="hidden text-center py-8">
+        <div class="text-5xl mb-4">🎉</div>
+        <h2 class="text-xl font-bold text-gray-800 mb-2">평가가 모두 완료되었습니다!</h2>
+        <p class="text-gray-600">수고하셨습니다. 창을 닫으셔도 됩니다.</p>
+      </div>
+
+      <!-- 로딩 표시 (초기엔 숨김) -->
+      <div id="loading-screen" class="hidden mt-6 text-center">
+        <div class="loader mb-2"></div>
+        <p class="text-gray-500 text-sm">데이터를 처리 중입니다...</p>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    // =========================================================================
+    // ★★★ 가장 중요! 여기에 아까 복사하신 '웹 앱 URL'을 붙여넣으세요! ★★★
+    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz7ME3X2VFl5NHj_aWsNVyqReytc9vH4pypJu3rgbG2STwDEKTifYuobM5M3JeAlw6o/exec';
+    // =========================================================================
+
+    let currentUser = { id: '', name: '' };
+    let subjects = []; // 평가해야 할 3명
+    let questions = []; // 문항 시트에서 가져온 질문들
+    let currentSubjectIndex = 0;
+
+    // 화면 요소들
+    const loginScreen = document.getElementById('login-screen');
+    const evalScreen = document.getElementById('eval-screen');
+    const completeScreen = document.getElementById('complete-screen');
+    const loadingScreen = document.getElementById('loading-screen');
+    const questionsContainer = document.getElementById('questions-container');
+
+    // 1. 로그인 함수
+    async function handleLogin() {
+      const id = document.getElementById('input-id').value.trim();
+      const name = document.getElementById('input-name').value.trim();
+
+      if (!id || !name) {
+        alert('출석번호와 이름을 모두 입력해주세요.');
+        return;
+      }
+
+      if (SCRIPT_URL === '여기에_웹_앱_URL을_붙여넣으세요') {
+        alert('선생님! 코드에서 SCRIPT_URL을 진짜 주소로 변경해주세요!');
+        return;
+      }
+
+      currentUser = { id, name };
+      showLoading(true);
+
+      try {
+        // GET 요청으로 명단 및 문항 가져오기
+        const response = await fetch(`${SCRIPT_URL}?action=getSubjects&studentId=${id}&studentName=${name}`);
+        const data = await response.json();
+
+        if (data.success) {
+          subjects = data.subjects;
+          questions = data.questions;
+          currentSubjectIndex = 0;
+          
+          loginScreen.classList.add('hidden');
+          renderEvaluationForm();
+          evalScreen.classList.remove('hidden');
+        } else {
+          alert(data.message || '로그인에 실패했습니다. 번호와 이름을 다시 확인해주세요.');
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        alert('서버와 통신하는 중 문제가 발생했습니다.');
+      } finally {
+        showLoading(false);
+      }
+    }
+
+    // 2. 평가 폼 그리기 함수
+    function renderEvaluationForm() {
+      document.getElementById('target-name').innerText = subjects[currentSubjectIndex];
+      document.getElementById('progress-text').innerText = `${currentSubjectIndex + 1} / ${subjects.length}`;
+      
+      // 입력창 초기화
+      document.getElementById('text-response').value = '';
+      questionsContainer.innerHTML = '';
+
+      // 문항 시트에서 가져온 질문들로 라디오 버튼 생성 (1~5점 척도 예시)
+      questions.forEach((q, index) => {
+        const qDiv = document.createElement('div');
+        qDiv.innerHTML = `
+          <p class="font-bold text-gray-800 mb-2">${index + 1}. ${q.text}</p>
+          <div class="flex justify-between items-center bg-gray-50 p-2 rounded border border-gray-200">
+            <label class="flex flex-col items-center cursor-pointer">
+              <input type="radio" name="${q.id}" value="1" required class="w-5 h-5 mb-1 text-blue-600">
+              <span class="text-xs">1점</span>
+            </label>
+            <label class="flex flex-col items-center cursor-pointer">
+              <input type="radio" name="${q.id}" value="2" class="w-5 h-5 mb-1 text-blue-600">
+              <span class="text-xs">2점</span>
+            </label>
+            <label class="flex flex-col items-center cursor-pointer">
+              <input type="radio" name="${q.id}" value="3" class="w-5 h-5 mb-1 text-blue-600">
+              <span class="text-xs">3점</span>
+            </label>
+            <label class="flex flex-col items-center cursor-pointer">
+              <input type="radio" name="${q.id}" value="4" class="w-5 h-5 mb-1 text-blue-600">
+              <span class="text-xs">4점</span>
+            </label>
+            <label class="flex flex-col items-center cursor-pointer">
+              <input type="radio" name="${q.id}" value="5" class="w-5 h-5 mb-1 text-blue-600">
+              <span class="text-xs">5점</span>
+            </label>
+          </div>
+        `;
+        questionsContainer.appendChild(qDiv);
+      });
+    }
+
+    // 3. 제출 함수
+    async function handleSubmit() {
+      const scores = [];
+      // 모든 문항의 점수 수집
+      for (const q of questions) {
+        const selected = document.querySelector(`input[name="${q.id}"]:checked`);
+        if (!selected) {
+          alert('모든 문항에 점수를 매겨주세요.');
+          return;
+        }
+        scores.push(selected.value);
+      }
+
+      const textResponse = document.getElementById('text-response').value;
+
+      const payload = {
+        evaluatorId: currentUser.id,
+        evaluatorName: currentUser.name,
+        targetName: subjects[currentSubjectIndex],
+        scores: scores,
+        textResponse: textResponse
+      };
+
+      showLoading(true);
+
+      try {
+        // POST 요청으로 데이터 전송
+        const response = await fetch(SCRIPT_URL, {
+          method: 'POST',
+          // no-cors 모드는 응답을 읽을 수 없으므로, GAS 웹앱 설정이 올바르다면 생략 가능하거나
+          // Content-Type을 text/plain으로 보내는 꼼수를 씁니다.
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(payload)
+        });
+
+        // 성공적으로 제출되면 다음 사람으로 넘어가기
+        currentSubjectIndex++;
+        
+        if (currentSubjectIndex < subjects.length) {
+          renderEvaluationForm(); // 다음 사람 평가 화면 띄우기
+          window.scrollTo(0, 0); // 화면 맨 위로
+        } else {
+          evalScreen.classList.add('hidden');
+          completeScreen.classList.remove('hidden'); // 모두 완료
+        }
+
+      } catch (error) {
+        console.error('Error:', error);
+        alert('제출 중 오류가 발생했습니다. 다시 시도해주세요.');
+      } finally {
+        showLoading(false);
+      }
+    }
+
+    function showLoading(show) {
+      if (show) {
+        loadingScreen.classList.remove('hidden');
+      } else {
+        loadingScreen.classList.add('hidden');
+      }
+    }
+  </script>
+</body>
+</html>
